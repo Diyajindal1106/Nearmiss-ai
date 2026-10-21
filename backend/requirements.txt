@@ -1,0 +1,16 @@
+# Web API
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+pydantic>=2.6,<3
+# Image handling
+pillow>=10.0
+numpy>=1.26
+# Vision-language model (CLIP via Hugging Face). CPU-only PyTorch is enough.
+# On Windows/Linux, install the CPU wheel first (see README):
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.2
+transformers>=4.40
+# Tests
+pytest>=8.0
+httpx>=0.27
