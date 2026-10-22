@@ -2,6 +2,7 @@
 import logging
 import os
 import threading
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,9 +11,26 @@ from starlette.concurrency import run_in_threadpool
 
 from . import config, db, repository, uploads
 from .classifier import DISCLAIMER, SCORE_NOTE, classifier
-from .schemas import ReportCreate, ReportUpdate
+from .schemas import ChatMessage, ReportCreate, ReportUpdate
 
 logging.basicConfig(level=logging.INFO)
+
+
+def _safe_load() -> None:
+    try:
+        classifier.load()
+    except Exception:  # noqa: BLE001 - status endpoint reports the error
+        pass
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    db.init_db()
+    config.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    if os.getenv("NEARMISS_PRELOAD") == "1":  # optional: warm the model in the background
+        threading.Thread(target=lambda: _safe_load(), daemon=True).start()
+    yield
+
 
 app = FastAPI(
     title="NearMiss AI API",
@@ -21,28 +39,14 @@ app = FastAPI(
         "Early-stage prototype. AI output is a suggestion requiring human verification; "
         "risk scores are a prioritisation aid, not a prediction of accidents."
     ),
+    lifespan=lifespan,
 )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
-    allow_methods=["GET", "POST", "PATCH"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def _startup() -> None:
-    db.init_db()
-    config.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    if os.getenv("NEARMISS_PRELOAD") == "1":  # optional: warm the model in the background
-        threading.Thread(target=lambda: _safe_load(), daemon=True).start()
-
-
-def _safe_load() -> None:
-    try:
-        classifier.load()
-    except Exception:  # noqa: BLE001 - status endpoint reports the error
-        pass
 
 
 @app.exception_handler(repository.NotFound)
@@ -153,3 +157,96 @@ def update_report(report_id: int, body: ReportUpdate):
 def dashboard_stats():
     with db.connect() as conn:
         return repository.stats(conn)
+
+
+# --------------------------------------------------------------------- chat
+@app.get("/api/chat/status", tags=["chat"])
+def chat_status():
+    api_key = os.getenv("GEMINI_API_KEY", "").strip().strip("'\"")
+    model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash").strip().strip("'\"")
+    return {
+        "configured": bool(api_key),
+        "model": model,
+    }
+
+
+@app.post("/api/chat", tags=["chat"])
+async def chat(body: ChatMessage):
+    api_key = os.getenv("GEMINI_API_KEY", "").strip().strip("'\"")
+    if not api_key:
+        return {
+            "status": "unconfigured",
+            "reply": (
+                "The Gemini AI Chatbot is not configured yet. "
+                "Set the GEMINI_API_KEY environment variable in your backend environment (or backend/.env) to enable live safety guidance."
+            ),
+            "configured": False,
+        }
+
+    model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash").strip().strip("'\"")
+    if model.startswith("models/"):
+        model = model[len("models/"):]
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": api_key,
+    }
+    payload = {
+        "system_instruction": {
+            "parts": [{
+                "text": (
+                    "You are NearMiss AI Assistant, a concise, helpful safety advisor for campus and workplace "
+                    "hazard identification, risk assessment, and incident reporting guidance. "
+                    "Provide clear, actionable safety steps."
+                )
+            }]
+        },
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": body.message}]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.4,
+            "maxOutputTokens": 600
+        }
+    }
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=25.0) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            if resp.status_code != 200:
+                try:
+                    err_json = resp.json()
+                    err_msg = err_json.get("error", {}).get("message") or resp.text[:200]
+                except Exception:
+                    err_msg = resp.text[:200]
+                return {
+                    "status": "error",
+                    "reply": f"Gemini API returned error ({resp.status_code}): {err_msg}",
+                    "configured": True,
+                }
+            data = resp.json()
+            candidates = data.get("candidates") or []
+            if not candidates:
+                return {
+                    "status": "error",
+                    "reply": "No response candidate received from Gemini.",
+                    "configured": True,
+                }
+            parts = candidates[0].get("content", {}).get("parts", [])
+            reply_text = "".join(p.get("text", "") for p in parts)
+            return {
+                "status": "ok",
+                "reply": reply_text.strip() or "Empty response received.",
+                "configured": True,
+            }
+    except Exception as exc:
+        return {
+            "status": "error",
+            "reply": f"Failed to connect to Gemini API: {type(exc).__name__}: {exc}",
+            "configured": True,
+        }

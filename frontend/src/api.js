@@ -1,5 +1,5 @@
 // Thin fetch wrapper. In dev, Vite proxies /api to the backend. Set VITE_API_URL to override.
-const BASE = import.meta.env.VITE_API_URL || "";
+const BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
 
 function message(detail, status) {
   if (typeof detail === "string") return detail;
@@ -50,4 +50,6 @@ export const api = {
     fd.append("file", file);
     return request("/api/analyze", { method: "POST", body: fd });
   },
+  chatStatus: () => request("/api/chat/status"),
+  chat: (message) => request("/api/chat", json("POST", { message })),
 };

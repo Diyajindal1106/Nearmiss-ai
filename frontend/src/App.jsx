@@ -6,6 +6,7 @@ import Dashboard from "./pages/Dashboard.jsx";
 import ReportForm from "./pages/ReportForm.jsx";
 import ReportDetail from "./pages/ReportDetail.jsx";
 import CampusMap from "./pages/CampusMap.jsx";
+import Chatbot from "./pages/Chatbot.jsx";
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/report" element={<ReportForm />} />
+          <Route path="/chat" element={<Chatbot />} />
           <Route path="/reports/:id" element={<ReportDetail />} />
           <Route path="/map" element={<CampusMap />} />
           <Route path="*" element={<div className="card"><h2>Page not found</h2></div>} />

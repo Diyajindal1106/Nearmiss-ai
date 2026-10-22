@@ -9,6 +9,16 @@ import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from .env files
+try:
+    from dotenv import load_dotenv
+    load_dotenv(BASE_DIR / ".env")
+    load_dotenv(BASE_DIR.parent / ".env")
+    load_dotenv(BASE_DIR.parent.parent / ".env")
+except ImportError:
+    pass
+
 DB_PATH = Path(os.getenv("NEARMISS_DB", BASE_DIR / "data" / "nearmiss.db"))
 UPLOAD_DIR = Path(os.getenv("NEARMISS_UPLOADS", BASE_DIR / "uploads"))
 

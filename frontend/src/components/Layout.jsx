@@ -1,5 +1,5 @@
 import { NavLink, Outlet, Link } from "react-router-dom";
-import { FilePlus2, LayoutDashboard, Map as MapIcon, Home } from "lucide-react";
+import { FilePlus2, LayoutDashboard, Map as MapIcon, Home, Bot } from "lucide-react";
 import { Logo } from "./ui.jsx";
 import { useConfig } from "../ConfigContext.jsx";
 import { ErrorState, Loading } from "./ui.jsx";
@@ -7,6 +7,7 @@ import { ErrorState, Loading } from "./ui.jsx";
 const links = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/report", label: "Report a hazard", icon: FilePlus2 },
+  { to: "/chat", label: "Safety Assistant", icon: Bot },
   { to: "/map", label: "Campus map", icon: MapIcon },
 ];
 

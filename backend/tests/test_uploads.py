@@ -22,7 +22,7 @@ def test_valid_png():
     (b"not an image at all", "image/png", 415),
     (png(), "application/pdf", 415),
     (png((10, 10)), "image/png", 400),
-    (b"0" * (5 * 1024 * 1024 + 1), "image/png", 413),
+    pytest.param(b"0" * (5 * 1024 * 1024 + 1), "image/png", 413, id="oversized"),
 ])
 def test_rejections(data, ct, status):
     with pytest.raises(uploads.UploadError) as e:

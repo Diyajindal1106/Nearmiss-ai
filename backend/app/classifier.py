@@ -172,6 +172,8 @@ class HazardClassifier:
                     }.items():
                         inputs = processor(text=spec, return_tensors="pt", padding=True)
                         t = model.get_text_features(**inputs)
+                        if hasattr(t, "pooler_output") and t.pooler_output is not None:
+                            t = t.pooler_output
                         t = t / t.norm(dim=-1, keepdim=True)
                         feats[key] = t
                 self._model, self._processor, self._torch, self._text_feats = (
@@ -199,6 +201,8 @@ class HazardClassifier:
             with torch.no_grad():
                 inputs = self._processor(images=img, return_tensors="pt")
                 f = self._model.get_image_features(**inputs)
+                if hasattr(f, "pooler_output") and f.pooler_output is not None:
+                    f = f.pooler_output
                 f = f / f.norm(dim=-1, keepdim=True)
                 cosines = {
                     k: float((f @ t.T).mean().item()) for k, t in self._text_feats.items()

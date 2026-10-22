@@ -20,7 +20,28 @@ export default function ReportForm() {
   const [submitError, setSubmitError] = useState(null);
 
   useEffect(() => () => preview && URL.revokeObjectURL(preview), [preview]);
-  const set = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+  const set = (k) => (e) => {
+    const val = e.target.value;
+    setForm((p) => ({ ...p, [k]: val }));
+    if (errors[k]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[k];
+        return next;
+      });
+    }
+  };
+
+  const selectCategory = (cat) => {
+    setForm((p) => ({ ...p, category: cat }));
+    if (errors.category) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.category;
+        return next;
+      });
+    }
+  };
 
   function clearImage() {
     setFile(null); setPreview(null); setAnalysis(null); setFileError(null);
@@ -36,7 +57,16 @@ export default function ReportForm() {
     if (f.size > config.upload.max_bytes) return setFileError(`Image is too large. Maximum size is ${config.upload.max_bytes / 1048576} MB.`);
     setFile(f); setPreview(URL.createObjectURL(f)); setAnalyzing(true);
     try {
-      setAnalysis(await api.analyze(f));
+      const res = await api.analyze(f);
+      setAnalysis(res);
+      if (res?.status === "ok" && res?.suggested_category) {
+        setForm((p) => (p.category ? p : { ...p, category: res.suggested_category }));
+        setErrors((prev) => {
+          const next = { ...prev };
+          delete next.category;
+          return next;
+        });
+      }
     } catch (err) {
       // Backend unreachable or rejected the file: say so; do not invent a suggestion.
       setAnalysis({ status: "unavailable", reason: err.message, scores: [] });
@@ -54,17 +84,24 @@ export default function ReportForm() {
   }
 
   async function submit(e) {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
+    if (submitting) return;
     const er = validate();
     setErrors(er); setSubmitError(null);
-    if (Object.keys(er).length) return;
+    if (Object.keys(er).length > 0) return;
     setSubmitting(true);
     try {
-      const body = { ...form, upload_id: analysis?.upload_id || null };
+      const body = {
+        description: form.description.trim(),
+        building: form.building,
+        location_details: form.location_details?.trim() || null,
+        category: form.category,
+        upload_id: analysis?.upload_id || null,
+      };
       const r = await api.createReport(body);
       nav(`/reports/${r.id}`, { state: { justSubmitted: true } });
     } catch (err) {
-      setSubmitError(err.message);
+      setSubmitError(err.message || "Failed to submit hazard report.");
       setSubmitting(false);
     }
   }
@@ -93,7 +130,7 @@ export default function ReportForm() {
           {analyzing && <p className="muted"><Loader2 className="spin" size={16} /> Analysing image with CLIP (the first run loads the model and can take a while)…</p>}
           {file && !analyzing && (
             <AiPanel analysis={analysis} categories={config.categories} selected={form.category}
-              onUse={(c) => setForm((p) => ({ ...p, category: c }))} />
+              onUse={selectCategory} />
           )}
         </div>
 
@@ -134,9 +171,24 @@ export default function ReportForm() {
         </div>
 
         {submitError && <p className="err box" role="alert">{submitError}</p>}
+        {Object.keys(errors).length > 0 && (
+          <div className="err box" role="alert" style={{ marginBottom: "1rem" }}>
+            <strong>Please resolve the following required fields before submitting:</strong>
+            <ul style={{ margin: "0.5rem 0 0 1.25rem", padding: 0 }}>
+              {Object.entries(errors).map(([k, msg]) => (
+                <li key={k}>{msg}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="actions">
-          <button className="btn btn-primary btn-lg" disabled={submitting || analyzing}>
-            {submitting ? "Submitting…" : "Submit report"}
+          <button
+            type="submit"
+            className="btn btn-primary btn-lg"
+            disabled={submitting || analyzing}
+            onClick={submit}
+          >
+            {submitting ? "Submitting report…" : "Submit report"}
           </button>
         </div>
       </form>

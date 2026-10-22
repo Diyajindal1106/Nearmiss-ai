@@ -1,5 +1,5 @@
 export const PRIORITY_LABEL = { urgent: "Urgent", high: "High", medium: "Medium", low: "Low" };
-export const STATUS_LABEL = { open: "Open", in_progress: "In progress", resolved: "Resolved" };
+export const STATUS_LABEL = { open: "Reported", in_progress: "In Progress", resolved: "Resolved" };
 
 export function timeAgo(iso) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;

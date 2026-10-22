@@ -215,6 +215,11 @@ def stats(conn) -> dict:
     items = [enrich(r, everyone, now) for r in everyone]
     unresolved = [i for i in items if i["status"] != "resolved"]
     count = lambda xs, key, keys: {k: sum(1 for x in xs if x[key] == k) for k in keys}  # noqa: E731
+    by_date = {}
+    for i in items:
+        day = i["created_at"][:10]
+        by_date[day] = by_date.get(day, 0) + 1
+    recent_trend = [{"date": d, "count": by_date[d]} for d in sorted(by_date.keys())[-7:]]
     return {
         "total": len(items),
         "open": sum(1 for i in items if i["status"] == "open"),
@@ -237,5 +242,6 @@ def stats(conn) -> dict:
         },
         "demo_count": sum(1 for i in items if i["is_demo"]),
         "groups": grouping.build_groups(everyone),
+        "recent_trend": recent_trend,
         "generated_at": now_iso(),
     }

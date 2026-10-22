@@ -28,6 +28,13 @@ class ReportCreate(BaseModel):
             raise ValueError("Unknown building/block.")
         return v
 
+    @field_validator("location_details")
+    @classmethod
+    def _loc(cls, v: Optional[str]) -> Optional[str]:
+        if not v or not str(v).strip():
+            return None
+        return str(v).strip()
+
     @field_validator("category")
     @classmethod
     def _category(cls, v: str) -> str:
@@ -37,8 +44,11 @@ class ReportCreate(BaseModel):
 
     @field_validator("upload_id")
     @classmethod
-    def _upload(cls, v):
-        if v is not None and not re.fullmatch(r"[0-9a-f]{32}", v):
+    def _upload(cls, v: Optional[str]) -> Optional[str]:
+        if not v or not str(v).strip():
+            return None
+        v = str(v).strip()
+        if not re.fullmatch(r"[0-9a-f]{32}", v):
             raise ValueError("Invalid upload_id.")
         return v
 
@@ -52,3 +62,7 @@ class ReportUpdate(BaseModel):
     severity: Optional[int] = Field(default=None, ge=1, le=5)
     assignee: Optional[str] = Field(default=None, max_length=120)
     resolution_notes: Optional[str] = Field(default=None, max_length=2000)
+
+
+class ChatMessage(BaseModel):
+    message: str = Field(min_length=1, max_length=1000)

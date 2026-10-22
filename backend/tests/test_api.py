@@ -46,3 +46,22 @@ def test_validation_errors(client):
     assert client.post("/api/reports", json={"description": "short", "building": "x", "category": "y"}).status_code == 422
     assert client.get("/api/reports/12345").status_code == 404
     assert client.get("/api/images/..%2f..%2fetc%2fpasswd").status_code == 404
+
+
+def test_chat_endpoints(client, monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    st = client.get("/api/chat/status")
+    assert st.status_code == 200
+    assert st.json()["configured"] is False
+
+    res = client.post("/api/chat", json={"message": "How do I report a hazard?"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "unconfigured"
+    assert "GEMINI_API_KEY" in data["reply"]
+
+
+def test_stats_recent_trend(client):
+    s = client.get("/api/stats")
+    assert s.status_code == 200
+    assert "recent_trend" in s.json()
